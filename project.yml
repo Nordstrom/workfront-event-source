@@ -1,0 +1,17 @@
+# Services must include this file as follows:
+# ```
+# custom:
+#   project: ${file(../project.yml)}}
+# ```
+# Top Level Project
+name: workfront-event-source
+deploymentBucket: ${self:custom.project.name}.serverless.deployment-bucket.${self:custom.private.region}
+
+stream:
+  name: ${self:custom.stage}-${self:custom.project.name}-stream
+#  arn: arn:aws:kinesis:${self:custom.private.region}:${self:custom.private.accountId}:stream/${self:custom.project.stream.name}
+#  exportStreamName: ${self:custom.stream.service, ''}:${self:custom.stage}:StreamName:${self:custom.streamVersion, ''}
+#  exportStreamArn: ${self:custom.stream.service, ''}:${self:custom.stage}:StreamArn:${self:custom.streamVersion, ''}
+
+eventHandler:
+  name: ${self:custom.stage}-${self:custom.project.name}-eventHandler

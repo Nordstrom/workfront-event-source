@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/schema#",
+  "self": {
+    "vendor": "com.nordstrom",
+    "name": "workfront/TASK",
+    "format": "jsonschema",
+    "version": "1-0-0"
+  },
+  "type": "object",
+  "properties": {
+    "ID": { "type": "string"},
+    "objCode":  { "type": "string", "pattern": "^TASK$" },
+    "name": { "type": "string"},
+    "ownerID": { "type": "string"},
+    "categoryID": { "type": "string"},
+    "status":  { "type": "string"},
+    "referenceNumber": { "type": "number"},
+    "teamID": { "type": ["string", "null"] },
+    "entryDate": { "type": "string", "format": "date-time" },
+    "lastUpdateDate": { "type": "string", "format": "date-time" },
+    "projectID": { "type": "string"},
+    "description": { "type": ["string", "null"] },
+    "priority": { "type": "number"},
+    "enteredByID": { "type": "string"},
+    "assignedToID":  { "type": "string"},
+    "lastUpdatedByID": { "type": "string"},
+    "customerID": { "type": "string"},
+    "accessorIDs": { "type": "array", "items": { "type": "string"} },
+    "parameterValues":{ "type": ["object", "null"] }
+  },
+  "required": [
+    "ID",
+    "objCode"
+  ],
+  "additionalProperties": true
+}
