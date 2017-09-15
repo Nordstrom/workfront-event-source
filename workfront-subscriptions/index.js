@@ -32,6 +32,7 @@ const impl = (apiKey, subscriptionsURL) => {
     return fetch(`${subscriptionsURL}/${subscriptionId}`, options)
   }
 
+  // TODO tidy up these eslint evasions
   const getPayloadSchema = (schemaFile) => {
     if (schemaFile && WF_CONSTANTS.objCodes.indexOf(schemaFile) > -1) {
       return require(`./schemas/${schemaFile}.json`) // eslint-disable-line global-require, import/no-dynamic-require
