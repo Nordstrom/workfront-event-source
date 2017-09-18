@@ -2,6 +2,9 @@ frameworkVersion: '>=1.0.0 <2.0.0'
 
 service: ${self:custom.project.eventHandler.name}
 
+plugins:
+  - subscribe-workfront-plugin
+
 custom:
   stage: ${opt:stage, self:custom.private.stage}
   private: ${file(../private.yml)}

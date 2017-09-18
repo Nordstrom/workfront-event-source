@@ -7,8 +7,13 @@ const WF_CONSTANTS = {
 
 const impl = (apiKey, subscriptionsURL) => {
   const composeMessage =
-    (objCode, objId, eventType, url, authToken) =>
-      JSON.stringify({ objCode, objId, eventType, url, authToken })
+    (objCode, objId, eventType, url, authToken) => {
+      if (objId) {
+        return JSON.stringify({ objCode, objId, eventType, url, authToken })
+      } else {
+        return JSON.stringify({ objCode, eventType, url, authToken })
+      }
+    }
 
   const subscribeToEvent = (objCode, objId, eventType, url, authToken) => {
     const options = {

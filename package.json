@@ -10,8 +10,6 @@
     "env": "./build/0.env.sh",
     "ins": "./build/1.install.sh",
     "sls": "./build/2.sls.sh",
-    "sub": "./build/3.subscribe.js",
-    "unsub": "./build/3.unsubscribe.js",
 
     "root:install": "npm run env && npm run ins -- \"Installing Top-Level Project Dependencies\"                       .",
     "root:install:all":"npm run root:install && npm run eventHandler:install",
