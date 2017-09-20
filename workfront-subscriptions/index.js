@@ -1,11 +1,42 @@
 const fetch = require('node-fetch')
+const envelopeSchema = require('./schemas/subscription-event.json')
 
+// NB OPTASK schema needs to be ok with more nulls; e.g., email issues don't use all the fields that store events does.
+// TODO really, these schemas all need some investigation
+const wfSchemas = {
+  OPTASK: require('./schemas/OPTASK.json'), // eslint-disable-line global-require
+  TASK: require('./schemas/TASK.json'), // eslint-disable-line global-require
+  // TODO add the rest
+}
+
+// all available Workfront possibilities
 const WF_CONSTANTS = {
   objCodes: ['USER', 'PORT', 'PRGM', 'PROJ', 'TASK', 'OPTASK', 'TMPL', 'PTLSEC', 'PTLTAB', 'CMPY', 'DOCU', 'NOTE'],
   eventTypes: ['CREATE', 'DELETE', 'UPDATE', 'SHARE'],
 }
 
-const impl = (apiKey, subscriptionsURL) => {
+const impl = (apiKey, subscriptionsURL, subscribedObjCodes, subscribedEventTypes) => {
+  const objCodes = []
+  const eventTypes = []
+
+  if (typeof subscribedObjCodes === 'string') {
+    const candidates = subscribedObjCodes.split('|')
+    for (let i = 0; i < candidates.length; i++) {
+      if (WF_CONSTANTS.objCodes.indexOf(candidates[i]) > -1 && wfSchemas[candidates[i]]) {
+        objCodes.push(candidates[i])
+      }
+    }
+  }
+
+  if (typeof subscribedEventTypes === 'string') {
+    const candidates = subscribedEventTypes.split('|')
+    for (let i = 0; i < candidates.length; i++) {
+      if (WF_CONSTANTS.eventTypes.indexOf(candidates[i]) > -1) {
+        eventTypes.push(candidates[i])
+      }
+    }
+  }
+
   const composeMessage =
     (objCode, objId, eventType, url, authToken) => {
       if (objId) {
@@ -37,20 +68,19 @@ const impl = (apiKey, subscriptionsURL) => {
     return fetch(`${subscriptionsURL}/${subscriptionId}`, options)
   }
 
-  // TODO tidy up these eslint evasions
-  const getPayloadSchema = (schemaFile) => {
-    if (schemaFile && WF_CONSTANTS.objCodes.indexOf(schemaFile) > -1) {
-      return require(`./schemas/${schemaFile}.json`) // eslint-disable-line global-require, import/no-dynamic-require
+  const getPayloadSchema = (objCode) => {
+    if (objCode && objCodes.indexOf(objCode) > -1) {
+      return wfSchemas[objCode]
     } else {
       return null
     }
   }
 
-  const getEnvelopeSchema = () => require('./schemas/subscription-event.json') // eslint-disable-line global-require
+  const getEnvelopeSchema = () => envelopeSchema
 
-  const getObjCodes = () => WF_CONSTANTS.objCodes
+  const getObjCodes = () => objCodes
 
-  const getEventTypes = () => WF_CONSTANTS.eventTypes
+  const getEventTypes = () => eventTypes
 
   return {
     subscribeToEvent,

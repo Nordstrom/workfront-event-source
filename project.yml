@@ -15,3 +15,5 @@ stream:
 
 eventHandler:
   name: ${self:custom.stage}-${self:custom.project.name}-eventHandler
+  objCodes: OPTASK # pipe-separated, e.g., USER|PORT|PRGM|PROJ|TASK|OPTASK|TMPL|PTLSEC|PTLTAB|CMPY|DOCU|NOTE # TODO subscribe multi
+  eventTypes: CREATE # pipe-separated, e.g.,CREATE|DELETE|UPDATE|SHARE # TODO subscribe multi

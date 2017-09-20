@@ -6,16 +6,14 @@ const path = require('path')
 const spawnSync = require('child_process').spawnSync
 const WF = require('workfront-subscriptions')
 
-const secrets = yaml.safeLoad(fs.readFileSync(path.join(__dirname, '..', '..', 'private.yml'), 'utf8'))
-const wf = WF(secrets.WF.apiKey, secrets.WF.apiEndpoint)
-
-const SERVICE_ENDPOINT = 'ServiceEndpoint: '
 const EVENT_HANDLER_NAME = 'eventHandler'
+const SERVICE_ENDPOINT = 'ServiceEndpoint: '
 
-const OBJECTS_FOR_FIELD_CHECK = ['TASK'] //= wf.getObjCodes() // TODO put in something for the other objCodes' schemas.
+const secrets = yaml.safeLoad(fs.readFileSync(path.join(__dirname, '..', '..', 'private.yml'), 'utf8'))
+const config = yaml.safeLoad(fs.readFileSync(path.join(__dirname, '..', '..', 'project.yml'), 'utf8'))
+const wf = WF(secrets.WF.apiKey, secrets.WF.apiEndpoint, config.eventHandler.objCodes, config.eventHandler.eventTypes)
+const OBJECTS_FOR_FIELD_CHECK = wf.getObjCodes() // TODO put in something for the other objCodes' schemas.
 const EVENT_TYPES = wf.getEventTypes()
-
-console.log(JSON.stringify(EVENT_TYPES))
 
 class ServerlessPlugin {
   constructor(serverless, options) {
@@ -29,6 +27,8 @@ class ServerlessPlugin {
 
     this.getOwnUrl = this.getOwnUrl.bind(this)
     // this.checkSubscriptions = this.checkSubscriptions.bind(this)
+    // this.getSubscriptions = this.getSubscriptions.bind(this)
+    // this.getSubscriptionIds = this.getSubscriptionIds.bind(this)
   }
 
   getOwnUrl() {
@@ -49,7 +49,16 @@ class ServerlessPlugin {
     return null
   }
 
-  // checkSubscriptions() { // TODO check for previous
+  // checkSubscriptions(url, objCode, eventType) { // TODO check for previous
+  //  // call getSubscriptions(url), dig through result to check for objCode/eventType and NO objId, since this will be subscribing to all
+  // }
+
+  // getSubscriptionIds(url) { // TODO get all subscribed Ids
+  //  // call getSubscriptions(url), map to just the subscriptionIds
+  // }
+
+  // getSubscriptions(url) { // TODO call subscriptions/list and filter by url
+  //  return [] // array of subscription jsons
   // }
 
   subscribeEndpoint() {
@@ -59,13 +68,13 @@ class ServerlessPlugin {
       const endpointToSubscribe = `${serviceEndpoint}/${EVENT_HANDLER_NAME}`
       this.serverless.cli.log(`Subscribing ${endpointToSubscribe} to Workfront events.`)
 
-      // TODO subscribe the lot
-      wf.subscribeToEvent('TASK', null, 'CREATE', endpointToSubscribe, secrets.AWS.authToken)
+      // TODO subscribe the lot, not just a single pair
+      wf.subscribeToEvent(wf.getObjCodes()[0], null, wf.getEventTypes()[0], endpointToSubscribe, secrets.AWS.authToken)
         .then((res) => {
           if (res.status < 300) {
-            this.serverless.cli.log('Successfully subscribed to TASK-CREATE.')
+            this.serverless.cli.log(`Successfully subscribed to ${wf.getObjCodes()[0]}-${wf.getEventTypes()[0]}.`)
           } else {
-            this.serverless.cli.log(`Subscription for TASK-CREATE was unsuccessful, with status ${res.status}.`)
+            this.serverless.cli.log(`Subscription for ${wf.getObjCodes()[0]}-${wf.getEventTypes()[0]} was unsuccessful, with status ${res.status}.`)
             this.serverless.cli.log(JSON.stringify(res))
           }
         })
@@ -78,7 +87,8 @@ class ServerlessPlugin {
   }
 
   unsubscribeEndpoint() {
-    // TODO need to save subscription IDs somewhere.
+    // TODO
+    // call getSubscriptionIds, then fire off wf.deleteSubscription for all
   }
 }
 

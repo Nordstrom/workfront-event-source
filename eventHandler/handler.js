@@ -4,7 +4,7 @@ const aws = require('aws-sdk') // eslint-disable-line import/no-unresolved, impo
 
 const WF = require('workfront-subscriptions')
 
-const wf = WF(process.env.WFAPI_KEY, process.env.WFAPI_ENDPOINT)
+const wf = WF(process.env.WFAPI_KEY, process.env.WFAPI_ENDPOINT, process.env.WFOBJ_CODES, process.env.WFEVENT_TYPES)
 
 const AJV = require('ajv')
 
@@ -17,8 +17,11 @@ const wfEnvelope = makeSchemaId(wfEnvelopeSchema)
 ajv.addSchema(wfEnvelopeSchema, wfEnvelope)
 
 // TODO is this overkill checking here?  Should this be down to the event consumers instead?
-// To validate the fields payload. NB Some services may wish to add to the list of required fields in the schemas. // TODO figure out what all the possible fields are, then set additionalProperties false.
-const OBJECTS_FOR_FIELD_CHECK = ['OPTASK', 'TASK'] //= wf.getObjCodes() // TODO put in something for the other ten objCodes' schemas.
+// To validate the fields payload. NB Some services may wish to add to the list of required fields in the schemas.
+// TODO figure out what all the possible fields are, then set additionalProperties false.  Also, may need to allow nulls
+// for some fields, based on errors from (non-Store-Events) events.
+// TODO put in something for the other objCodes' schemas.
+const OBJECTS_FOR_FIELD_CHECK = wf.getObjCodes()
 for (let i = 0; i < OBJECTS_FOR_FIELD_CHECK.length; i++) {
   const schemaToAdd = wf.getPayloadSchema(OBJECTS_FOR_FIELD_CHECK[i])
   if (schemaToAdd) {
