@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/schema#",
+  "self": {
+    "vendor": "com.nordstrom",
+    "name": "workfront/stream-ingress",
+    "format": "jsonschema",
+    "version": "1-0-0"
+  },
+  "type": "object",
+  "properties": {
+    "schema":      { "type": "string" },
+    "trace":       { "type": "object" },
+    "snapshot":    { "type": "object" },
+    "followsFrom": { "type": "string" },
+    "origin":      { "type": "string" },
+    "timeOrigin":  { "type": "string", "format": "date-time" },
+    "data": {
+      "type": "object",
+      "properties": {
+        "schema": { "type": "string"},
+        "eventType":  { "type": "string", "enum": ["CREATE", "DELETE", "UPDATE", "SHARE"] },
+        "subscriptionId": { "type": "string"},
+        "fields": {
+          "type": "object",
+          "properties": {
+            "ID": { "type": "string"},
+            "objCode":  { "type": "string", "enum": ["USER", "PORT", "PRGM", "PROJ", "TASK", "OPTASK", "TMPL", "PTLSEC", "PTLTAB", "CMPY", "DOCU", "NOTE"] }
+          },
+          "required": [
+            "ID",
+            "objCode"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "schema",
+        "eventType",
+        "subscriptionId",
+        "fields"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "origin",
+    "timeOrigin",
+    "data"
+  ],
+  "additionalProperties": false
+}
