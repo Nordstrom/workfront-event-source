@@ -12,8 +12,6 @@ const SERVICE_ENDPOINT = 'ServiceEndpoint: '
 const secrets = yaml.safeLoad(fs.readFileSync(path.join(__dirname, '..', '..', 'private.yml'), 'utf8'))
 const config = yaml.safeLoad(fs.readFileSync(path.join(__dirname, '..', '..', 'project.yml'), 'utf8'))
 const wf = WF(secrets.WF.apiKey, secrets.WF.apiEndpoint, config.eventHandler.objCodes, config.eventHandler.eventTypes)
-const OBJECTS_FOR_FIELD_CHECK = wf.getObjCodes() // TODO put in something for the other objCodes' schemas.
-const EVENT_TYPES = wf.getEventTypes()
 
 class ServerlessPlugin {
   constructor(serverless, options) {
