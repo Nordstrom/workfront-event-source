@@ -33,7 +33,6 @@ const constants = {
   INVALID_REQUEST: 'Invalid Request: could not validate request to the schema provided.',
   INTEGRATION_ERROR: 'Kinesis Integration Error',
   API_NAME: 'Event Handler',
-  EVENT_SOURCE: 'workfront/subscription',
 }
 
 const impl = {
@@ -59,6 +58,7 @@ const impl = {
   success: response => impl.response(200, JSON.stringify(response)),
 
   validateAndWriteKinesisEventFromApiEndpoint(event, callback) {
+    const received = new Date().toISOString()
     const eventData = JSON.parse(event.body)
     console.log('WFE', eventData)
 
@@ -68,16 +68,22 @@ const impl = {
     } else if (OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.fields.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.fields.objCode}/1-0-0`, eventData.fields)) { // TODO is this overkill checking here?  Should this be down to the event consumers instead?
       callback(null, impl.clientError(`Could not validate the fields payload to the schema for ${eventData.fields.objCode} .  Errors: ${ajv.errorsText()}`, eventData.fields))
     } else { // i.e., it is a Workfront event and either the fields payload is ok or not bothering to check fields for given objCode
-      const origin = `${constants.EVENT_SOURCE}/${eventData.fields.objCode}/${eventData.eventType}`
-      eventData.schema = `com.nordstrom/workfront/${eventData.fields.objCode}/1-0-0`
-      console.log('constructed origin and schema for payload fields', origin, eventData.schema)
+      let origin = `workfront/${eventData.fields.objCode}/${eventData.eventType}`
+      let schema = `com.nordstrom/workfront/${eventData.fields.objCode}/${eventData.eventType}` // TODO By adding the eventType here, the consumer will need to tinker with the OPTASK schema, which is a bit unfortunate.  Otherwise, we'll need to have the consumer have one method handle all event types.
+      if (eventData.eventType !== 'DELETE') { // categoryID not provided for DELETEs, unfortunately.  Means a lot of unnecessary calls to eventWriter to cancel the deal out of dynamo.  Could do a read first, since these are half the throughput of a write.  Guess it depends how many other projects are doing deletes.
+        origin = `${origin}/${eventData.fields.categoryID}`
+        schema = `${schema}/${eventData.fields.categoryID}`
+      }
+      eventData.fields.schema = `${schema}/1-0-0`
+
+      console.log('constructed origin and schema for payload fields', origin, eventData.fields.schema) // TODO remove
 
       const kinesis = new aws.Kinesis()
       const newEvent = {
         Data: JSON.stringify({
-          schema: 'com.nordstrom/workfront/stream-ingress/1-0-0',
-          timeOrigin: new Date().toISOString(),
-          data: eventData,
+          schema: 'com.nordstrom/workfront/stream-ingress/1-0-0', // see ./schemas/stream-ingress in the workfront-subscriptions node module for reference
+          timeOrigin: received,
+          data: eventData.fields,
           origin,
         }),
         PartitionKey: eventData.fields.ID,
@@ -86,7 +92,7 @@ const impl = {
 
       kinesis.putRecord(newEvent, (err, data) => {
         if (err) {
-          callback(null, impl.kinesisError(eventData.schema, err))
+          callback(null, impl.kinesisError(eventData.fields.schema, err))
         } else {
           callback(null, impl.success(data))
         }

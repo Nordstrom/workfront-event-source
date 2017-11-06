@@ -1,5 +1,6 @@
 const fetch = require('node-fetch')
 const envelopeSchema = require('./schemas/subscription-event.json')
+const streamEgressSchema = require('./schemas/stream-egress.json')
 
 // NB OPTASK schema needs to be ok with more nulls; e.g., email issues don't use all the fields that store events does.
 // TODO really, these schemas all need some investigation
@@ -78,6 +79,8 @@ const impl = (apiKey, subscriptionsURL, subscribedObjCodes, subscribedEventTypes
 
   const getEnvelopeSchema = () => envelopeSchema
 
+  const getStreamSchema = () => streamEgressSchema
+
   const getObjCodes = () => objCodes
 
   const getEventTypes = () => eventTypes
@@ -87,6 +90,7 @@ const impl = (apiKey, subscriptionsURL, subscribedObjCodes, subscribedEventTypes
     deleteSubscription,
     getPayloadSchema,
     getEnvelopeSchema,
+    getStreamSchema,
     getObjCodes,
     getEventTypes,
   }

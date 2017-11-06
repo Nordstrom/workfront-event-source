@@ -67,6 +67,7 @@ class ServerlessPlugin {
       this.serverless.cli.log(`Subscribing ${endpointToSubscribe} to Workfront events.`)
 
       // TODO subscribe the lot, not just a single pair
+      // TODO check endpoint not already subscribed to the ObjCode-EventType pair.
       wf.subscribeToEvent(wf.getObjCodes()[0], null, wf.getEventTypes()[0], endpointToSubscribe, secrets.AWS.authToken)
         .then((res) => {
           if (res.status < 300) {

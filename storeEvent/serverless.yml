@@ -1,0 +1,115 @@
+frameworkVersion: '>=1.0.0 <2.0.0'
+
+service: ${self:custom.project.storeEvent.name}
+
+custom:
+  stage: ${opt:stage, self:custom.private.stage}
+  private: ${file(../private.yml)}
+  project: ${file(../project.yml)}
+  stream: ${file(../stream/serverless.yml)}
+  streamVersion: 1
+  # Store Events Consumer
+  # WARNING: each project that uses these will have to define the following two attributes in its serverless.yml:
+  storeEventVersion: 1 # The version of this service to depend upon
+  storeEvent: ${self:} # externally, use `${file(~/storeEvent/serverless.yml)}`, replacing the `~` therein with the appropriate relative reference [e.g. '..' or '../..']
+
+provider:
+  name: aws
+  deploymentBucket: ${self:custom.project.deploymentBucket}
+  runtime: nodejs6.10
+  profile: ${self:custom.private.profile}
+  region: ${self:custom.private.region}
+
+functions:
+  consumer:
+    role:
+      Fn::GetAtt: [ StoreEvent, Arn ]
+    handler: eventConsumer.processKinesisEvent
+    environment:
+      API_KEY: ${self:custom.private.WF.apiKey}
+      API_ENDPOINT: ${self:custom.private.WF.apiEndpoint} # not really used (just to instantiate a wf object to grab the schemas)
+      OBJ_CODE: OPTASK # Store Events Consumer is only interested in Issues (OPTASK)
+      EVENT_TYPES: UPDATE|DELETE # Store Events Consumer ignores SHARE, which seems to just add ids to the accessorIDs array, which doesn't affect StoreEvents content.  CREATEs are generated on entering a New Issue, on copying, and on populating any previously empty field; too ambiguous.
+      CATEGORY_ID: ${self:custom.private.WF.categoryID}
+      WRITE_URL: ${self:custom.project.storeEvent.writer.url}
+      WRITE_PATH: ${self:custom.project.storeEvent.writer.path}
+      READ_URL: ${self:custom.project.storeEvent.reader.url}
+      READ_PATH: ${self:custom.project.storeEvent.reader.path}
+      STORE_EVENTS_API_KEY: ${self:custom.private.storeEvents.readApiKey} # TODO might not need if Workfront release works out as expected
+      # STORE_EVENT_REGION: ${self:custom.project.storeEvent.region}
+      WF_HOSTNAME: ${self:custom.project.storeEvent.workfront.hostname}
+      WF_PATH: ${self:custom.project.storeEvent.workfront.path}
+    events:
+      - stream:
+          arn: ${self:custom.project.stream.arn}
+          # TODO replace this with the below, once supported by Serverless
+          # Fn::ImportValue: ${self:custom.stream.custom.exportStreamArn}
+          # batchSize: 20 # TODO take default after synch processing of seed from EIM
+          enabled: true
+          startingPosition: TRIM_HORIZON
+          timeout: 30
+
+resources:
+  Resources:
+    # Log Groups
+    ConsumerLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: /aws/lambda/${self:service}-${self:custom.stage}-consumer
+        RetentionInDays: 7
+
+    # Store Events Consumer Roles
+    StoreEvent: # role for the Lambda that filters Workfront events and populates Store Events stream
+      Type: AWS::IAM::Role
+      Properties:
+        Path: /
+        RoleName: ${self:custom.stage}StoreEvent${self:custom.storeEventVersion}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: sts:AssumeRole
+              Principal:
+                Service: lambda.amazonaws.com
+        ManagedPolicyArns:
+          - ${self:custom.private.teamPolicy}
+        Policies:
+          - PolicyName: CreateAndWriteToLogStream
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'logs:CreateLogStream'
+                  Resource:
+                    Fn::GetAtt: [ ConsumerLogGroup, Arn ]
+                - Effect: Allow
+                  Action:
+                    - 'logs:PutLogEvents'
+                  Resource:
+                    Fn::Join:
+                      - ':'
+                      - - Fn::GetAtt: [ ConsumerLogGroup, Arn ]
+                        - '*'
+          - PolicyName: ReadFromKinesis
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'kinesis:GetRecords'
+                    - 'kinesis:GetShardIterator'
+                    - 'kinesis:DescribeStream'
+                    - 'kinesis:ListStreams'
+                  Resource:
+                    Fn::ImportValue: ${self:custom.stream.custom.exportStreamArn}
+          - PolicyName: InvokeStoreEventApis
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'execute-api:Invoke'
+                  Resource:
+                    - ${self:custom.project.storeEvent.writer.arn}
+                    - ${self:custom.project.storeEvent.reader.arn} # TODO might not need if new release of Wprkfront works out
