@@ -56,10 +56,10 @@ const impl = {
     postRequest.end()
   },
 
-  getStoreEvents: (data, callback) => {
-    // TODO Simple get with apiKey
-    const apiKey = constants.STORE_EVENTS.STOTE_EVENTS_API_KEY
-  },
+  // getStoreEvents: (data, callback) => {
+  //   // TODO Simple get with apiKey
+  //   const apiKey = constants.STORE_EVENTS.STOTE_EVENTS_API_KEY
+  // },
 
   updateWF: (id, data, callback) => {
     // e.g., data = {

@@ -130,7 +130,7 @@ const impl = {
     const end = endDate ? endDate.split(' ')[0] : null
 
     return {
-      isValid: !startDate ||! endDate || (today <= end && startDate < endDate), //TODO remove.  the nulls are to ignore checking new form versions
+      isValid: !startDate || !endDate || (today <= end && startDate < endDate), // TODO remove.  the nulls are to ignore checking new form versions
       startDate,
       endDate,
     }
