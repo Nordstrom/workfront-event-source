@@ -36,5 +36,5 @@ storeEvent:
     url: https://${self:custom.project.storeEvent.reader.restApi}.execute-api.${self:custom.project.storeEvent.region}.amazonaws.com
     path: /${self:custom.project.storeEvent.stage}/${self:custom.project.storeEvent.reader.method}/
   workfront:
-    hostname: nordstrom.my.workfront.com
+    hostname: ${self:custom.private.WF.apiHostname}
     path: /attask/api/v7.0/issue # we're using Issues in Workfront (OPTASK)

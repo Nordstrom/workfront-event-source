@@ -10,7 +10,7 @@
   "properties": {
     "eventType":  { "type": "string", "enum": ["CREATE", "DELETE", "UPDATE", "SHARE"] },
     "subscriptionId": { "type": "string"},
-    "fields": {
+    "newState": {
       "type": "object",
       "properties": {
         "ID": { "type": "string"},
@@ -21,12 +21,34 @@
         "objCode"
       ],
       "additionalProperties": true
+    },
+    "oldState": {
+      "type": "object",
+      "properties": {
+        "ID": { "type": "string"},
+        "objCode":  { "type": "string", "enum": ["USER", "PORT", "PRGM", "PROJ", "TASK", "OPTASK", "TMPL", "PTLSEC", "PTLTAB", "CMPY", "DOCU", "NOTE"] }
+      },
+      "additionalProperties": true
+    },
+    "eventTime": {
+      "type": "object",
+      "properties": {
+        "nano": { "type": "number"},
+        "epochSecond": { "type": "number"}
+      },
+      "required": [
+        "nano",
+        "epochSecond"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [
     "eventType",
     "subscriptionId",
-    "fields"
+    "newState",
+    "oldState",
+    "eventTime"
   ],
   "additionalProperties": false
 }

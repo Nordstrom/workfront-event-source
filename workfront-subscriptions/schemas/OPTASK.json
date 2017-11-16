@@ -8,6 +8,7 @@
   },
   "type": "object",
   "properties": {
+    "schema":  { "type": "string", "format": "uri" },
     "ID": { "type": "string"},
     "objCode":  { "type": "string", "pattern": "^OPTASK$" },
     "name": { "type": "string"},

@@ -36,6 +36,7 @@ const constants = {
 }
 
 const impl = {
+  // check these are ok (i.e., Workfront does not keep trying to deliver the same event, unless something goes wrong, though Kinesis error is not really their problem, but still nice to get the re-delivery).
   response: (statusCode, body) => ({
     statusCode,
     headers: {
@@ -65,34 +66,79 @@ const impl = {
     // TODO less verbose errors
     if (!ajv.validate(wfEnvelope, eventData)) {
       callback(null, impl.clientError(`Could not validate event as a Workfront subscription event.  Errors: ${ajv.errorsText()}`, eventData))
-    } else if (OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.fields.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.fields.objCode}/1-0-0`, eventData.fields)) { // TODO is this overkill checking here?  Should this be down to the event consumers instead?
-      callback(null, impl.clientError(`Could not validate the fields payload to the schema for ${eventData.fields.objCode} .  Errors: ${ajv.errorsText()}`, eventData.fields))
-    } else { // i.e., it is a Workfront event and either the fields payload is ok or not bothering to check fields for given objCode
-      let origin = `workfront/${eventData.fields.objCode}/${eventData.eventType}`
-      let schema = `com.nordstrom/workfront/${eventData.fields.objCode}/${eventData.eventType}` // TODO By adding the eventType here, the consumer will need to tinker with the OPTASK schema, which is a bit unfortunate.  Otherwise, we'll need to have the consumer have one method handle all event types.
-      if (eventData.eventType !== 'DELETE') { // categoryID not provided for DELETEs, unfortunately.  Means a lot of unnecessary calls to eventWriter to cancel the deal out of dynamo.  Could do a read first, since these are half the throughput of a write.  Guess it depends how many other projects are doing deletes.
-        origin = `${origin}/${eventData.fields.categoryID}`
-        schema = `${schema}/${eventData.fields.categoryID}`
-      }
-      eventData.fields.schema = `${schema}/1-0-0`
-
-      console.log('constructed origin and schema for payload fields', origin, eventData.fields.schema) // TODO remove
+    } else if (OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.newState.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.newState.objCode}/1-0-0`, eventData.newState)) { // TODO is this overkill checking here?  Should this be down to the event consumers instead?
+      callback(null, impl.clientError(`Could not validate the newState payload to the schema for ${eventData.newState.objCode} .  Errors: ${ajv.errorsText()}`, eventData.newState))
+    } else if (eventData.eventType === 'CREATE' && Object.keys(eventData.oldState).length === 0) { // a true CREATE event, i.e., no previous state available
+      const origin = `workfront/${eventData.newState.objCode}/CREATE/${eventData.newState.categoryID}`
+      eventData.newState.schema = `com.nordstrom/workfront/${eventData.newState.objCode}/${eventData.newState.categoryID}/1-0-0` // NB implicit CREATE by the fact it isn't an UPDATE-objCode and has a categoryID
+      console.log('constructed origin and schema for payload fields', origin, eventData.newState.schema) // TODO remove
 
       const kinesis = new aws.Kinesis()
       const newEvent = {
         Data: JSON.stringify({
           schema: 'com.nordstrom/workfront/stream-ingress/1-0-0', // see ./schemas/stream-ingress in the workfront-subscriptions node module for reference
-          timeOrigin: received,
-          data: eventData.fields,
+          timeOrigin: received, // TODO flag and handle re-try by looking at Workfront timestamp and received timestamp.  Use Workfront timestamp instead here.
+          data: eventData.newState,
           origin,
         }),
-        PartitionKey: eventData.fields.ID,
+        PartitionKey: eventData.newState.ID,
         StreamName: process.env.STREAM_NAME,
       }
 
       kinesis.putRecord(newEvent, (err, data) => {
         if (err) {
-          callback(null, impl.kinesisError(eventData.fields.schema, err))
+          callback(null, impl.kinesisError(eventData.newState.schema, err))
+        } else {
+          callback(null, impl.success(data))
+        }
+      })
+    } else if (OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.oldState.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.oldState.objCode}/1-0-0`, eventData.oldState)) { // TODO is this overkill checking here?  Should this be down to the event consumers instead?
+      callback(null, impl.clientError(`Could not validate the oldState payload to the schema for ${eventData.oldState.objCode} .  Errors: ${ajv.errorsText()}`, eventData.oldState))
+    } else if (eventData.oldState.objCode !== eventData.newState.objCode || eventData.oldState.ID !== eventData.newState.ID) { // call out inexplicable changes to state.  This *should* never be satisfied, or something odd is going on with Workfront.
+      callback(null, impl.clientError(`Object code or ID has changed for ${eventData.oldState.ID}, ${eventData.oldState.objCode}.`, eventData.newState))
+    } else { // NB all routing info like origin or schema are constructed using the oldState, because--if some abuse of Workfront functionality is going on--we either will do nothing or we will reinstate the oldState, which is considered the last ok set of details.
+      let origin = `workfront/${eventData.oldState.objCode}/${eventData.eventType}` // Should reflect whether it was from a WF CREATE or UPDATE
+      let schema = 'com.nordstrom/workfront'
+      // The consumer will need to tinker with the OPTASK schema, which is a bit unfortunate.  Otherwise, we'll need to have the consumer have one method handle all event types.
+      if (eventData.eventType === 'DELETE') { // categoryID not provided for DELETEs, unfortunately.  Means a lot of unnecessary calls to eventWriter to cancel the deal out of dynamo.  Could do a read first, since these are half the throughput of a write.  Guess it depends how many other projects are doing deletes.
+        schema = `${schema}/${eventData.oldState.objCode}/DELETE/1-0-0`
+      } else {
+        origin = `${origin}/${eventData.oldState.categoryID}`
+        schema = `${schema}/UPDATE-${eventData.oldState.objCode}/${eventData.oldState.categoryID}/1-0-0`
+      }
+      console.log('constructed origin and schema for payload fields', origin, schema) // TODO remove
+
+      const keyId = eventData.oldState.ID
+      const objCode = eventData.oldState.objCode
+
+      delete eventData.oldState.ID
+      delete eventData.oldState.objCode
+      delete eventData.newState.ID
+      delete eventData.newState.objCode
+
+      const updates = {
+        schema,
+        ID: keyId,
+        objCode,
+        oldState: eventData.oldState,
+        newState: eventData.newState,
+      }
+
+      const kinesis = new aws.Kinesis()
+      const newEvent = {
+        Data: JSON.stringify({
+          schema: 'com.nordstrom/workfront/stream-ingress/1-0-0', // see ./schemas/stream-ingress in the workfront-subscriptions node module for reference
+          timeOrigin: received, // TODO flag and handle re-try by looking at Workfront timestamp and received timestamp.  Use Workfront timestamp instead here.
+          data: updates,
+          origin,
+        }),
+        PartitionKey: keyId,
+        StreamName: process.env.STREAM_NAME,
+      }
+
+      kinesis.putRecord(newEvent, (err, data) => {
+        if (err) {
+          callback(null, impl.kinesisError(eventData.newState.schema, err))
         } else {
           callback(null, impl.success(data))
         }

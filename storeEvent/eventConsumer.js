@@ -2,26 +2,7 @@
 
 const KH = require('kinesis-handler') // eslint-disable-line import/no-unresolved
 const WF = require('workfront-subscriptions')
-const communicator = require('./lib/communicator')
-
-const wf = WF(process.env.API_KEY, process.env.API_ENDPOINT, process.env.OBJ_CODE, process.env.EVENT_TYPES)
-
-const eventSchema = wf.getStreamSchema()
-const issueSchema = wf.getPayloadSchema(process.env.OBJ_CODE)
-// TODO If we don't want to mess about with the schemas here, we need to provide one of each in the workfront-subscriptions,
-// which gets quite cluttered and would ideally have the family relate to one parent, rather than multiple copies of mostly the same thing.
-// const createHeader = Object.assign({}, issueSchema.self)
-const updateHeader = Object.assign({}, issueSchema.self)
-const deleteHeader = Object.assign({}, issueSchema.self)
-// createHeader.name `${createHeader.name}/CREATE/${process.env.CATEGORY_ID}`
-updateHeader.name = `${updateHeader.name}/UPDATE/${process.env.CATEGORY_ID}`
-deleteHeader.name = `${deleteHeader.name}/DELETE`
-// const createSchema = Object.assign({}, issueSchema)
-const updateSchema = Object.assign({}, issueSchema)
-const deleteSchema = Object.assign({}, issueSchema)
-// createSchema.self = createHeader
-updateSchema.self = updateHeader
-deleteSchema.self = deleteHeader
+// const communicator = require('./lib/communicator')
 
 const constants = {
   // self
@@ -32,6 +13,9 @@ const constants = {
   // Workfront ApiKey
   APIKEY: process.env.API_KEY,
 }
+
+const wf = WF(process.env.API_KEY, process.env.API_ENDPOINT, process.env.OBJ_CODE, process.env.EVENT_TYPES)
+const eventSchema = wf.getStreamSchema()
 
 /**
  * Transform record (which will be of the form in ingress schema) to the form of egress schema
@@ -46,6 +30,24 @@ const transformer = (payload, record) => {
 }
 
 const kh = new KH.KinesisSynchronousHandler(eventSchema, constants.MODULE, transformer)
+
+// make needed versions of schemas
+// TODO If we don't want to mess about with the schemas here, we need to provide one of each in the workfront-subscriptions,
+// which gets quite cluttered and would ideally have the family relate to one parent, rather than multiple copies of mostly the same thing.
+const issueSchema = wf.getPayloadSchema(process.env.OBJ_CODE)
+const createHeader = Object.assign({}, issueSchema.self)
+createHeader.name = `${createHeader.name}/${process.env.CATEGORY_ID}`
+const createSchema = Object.assign({}, issueSchema)
+createSchema.self = createHeader
+const deleteHeader = Object.assign({}, issueSchema.self)
+deleteHeader.name = `${deleteHeader.name}/DELETE`
+const deleteSchema = Object.assign({}, issueSchema) // Can't filter with current WF functionality for DELETEs.
+deleteSchema.self = deleteHeader
+const updateIssueSchema = wf.getUpdatePayloadSchema(process.env.OBJ_CODE, 'UPDATE')
+const updateHeader = Object.assign({}, updateIssueSchema.self)
+updateHeader.name = `${updateHeader.name}/${process.env.CATEGORY_ID}`
+const updateSchema = Object.assign({}, updateIssueSchema)
+updateSchema.self = updateHeader
 
 /**
  * Example event:
@@ -148,16 +150,19 @@ const impl = {
    * @param event The event to create in Store Events (since it has been newly created from Workfront, with a new Workfront id).
    * @param complete The callback to inform of completion, with optional error parameter.
    */
-  // createHandler: (event, complete) => {
-  //   // TODO put together rest of store event
-  //   // TODO ensure no empty strings on the fields where iffiness may happen.  NB In this migration, id is a given (so non-empty).
-  //   // NONEMPTY_FIELDS.forEach((field) => {
-  //   //   if (data[field].length === 0) {
-  //   //     body[field] = 'NA'
-  //   //   }
-  //   // })
-  //   // TODO call eventWriter with approriate callback to call WF to set status to INP or AWF, depending on eventWriter call, then call complete on WF callback
-  // },
+  createHandler: (event, complete) => {
+    console.log('Received a CREATE event.  Code not implemented.') // TODO remove
+    setTimeout(() => complete(), 0) // TODO remove
+
+    // TODO put together rest of store event
+    // TODO ensure no empty strings on the fields where iffiness may happen.  NB In this migration, id is a given (so non-empty).
+    // NONEMPTY_FIELDS.forEach((field) => {
+    //   if (data[field].length === 0) {
+    //     body[field] = 'NA'
+    //   }
+    // })
+    // TODO call eventWriter with approriate callback to call WF to set status to INP or AWF, depending on eventWriter call, then call complete on WF callback
+  },
 
   /**
    * Assesses event from Workfront with respect to the current state of the Store Events system for all items keyed by the Workfront id.
@@ -175,68 +180,82 @@ const impl = {
    * @param complete The callback to inform of completion, with optional error parameter.
    */
   updateHandler: (event, complete) => {
-    const id = event.data.ID
-    const form = event.data.parameterValues
-    const storeResult = impl.makeAndCheckListOfStores(form)
-    const dateResult = impl.makeAndCheckDates(form)
+    console.log('Received an UPDATE event.  Messaging via Notes not yet implemented and not thrilled with messaging via custom form.') // TODO remove
+    setTimeout(() => complete(), 0) // TODO remove
 
-    const data = {
-      apiKey: constants.APIKEY,
-    }
-
-    if (!storeResult.isValid) {
-      setTimeout(() => {
-        data.status = 'AWF'
-        data['DE:System comments'] = 'List of Stores was not a string.' // TODO Be a bit more forthcoming if you do implement store validation of some sort.
-
-        communicator.updateWF(id, data, (err, res) => {
-          if (err) {
-            complete(err)
-          } else {
-            console.log('WF response ', res) // TODO remove
-            complete()
-          }
-        })
-      }, 0)
-    } else if (!dateResult.isValid) {
-      setTimeout(() => {
-        data.status = 'AWF'
-        data['DE:System comments'] = 'Dates were inconsistent.  Please check.' // TODO Be a bit more forthcoming with what exactly was wrong.
-
-        communicator.updateWF(id, data, (err, res) => {
-          if (err) {
-            complete(err)
-          } else {
-            console.log('WF response ', res) // TODO remove
-            complete()
-          }
-        })
-      }, 0)
-    } else {
-      // TODO put together rest of store event
-      // TODO ensure no empty strings on the fields where iffiness may happen.  NB In this migration, id is a given (so non-empty).
-      // NONEMPTY_FIELDS.forEach((field) => {
-      //   if (data[field].length === 0) {
-      //     body[field] = 'NA'
-      //   }
-      // })
-
-      // TODO call eventWriter with approriate callback to call WF to set status to INP or AWF, depending on eventWriter call, then call complete on WF callback
-      setTimeout(() => {
-        data.status = 'INP'
-        data['DE:System comments'] = 'Theoretically, event has been written successfully, though this has not yet been implemented.' // TODO update this message.
-
-        communicator.updateWF(id, data, (err, res) => {
-          if (err) {
-            complete(err)
-          } else {
-            console.log('WF response ', res) // TODO remove
-            complete()
-          }
-        })
-      }, 0)
-    }
+    // TODO put together rest of store event
+    // TODO ensure no empty strings on the fields where iffiness may happen.  NB In this migration, id is a given (so non-empty).
+    // NONEMPTY_FIELDS.forEach((field) => {
+    //   if (data[field].length === 0) {
+    //     body[field] = 'NA'
+    //   }
+    // })
+    // TODO call eventWriter with approriate callback to call WF to set status to INP or AWF, depending on eventWriter call, then call complete on WF callback
   },
+
+  // updateHandler: (event, complete) => {
+  //   const id = event.data.ID
+  //   const form = event.data.newState.parameterValues
+  //   const storeResult = impl.makeAndCheckListOfStores(form)
+  //   const dateResult = impl.makeAndCheckDates(form)
+  //
+  //   const data = {
+  //     apiKey: constants.APIKEY,
+  //   }
+  //
+  //   if (!storeResult.isValid) {
+  //     setTimeout(() => {
+  //       data.status = 'AWF'
+  //       data['DE:System comments'] = 'List of Stores was not a string.' // TODO Be a bit more forthcoming if you do implement store validation of some sort.
+  //
+  //       communicator.updateWF(id, data, (err, res) => {
+  //         if (err) {
+  //           complete(err)
+  //         } else {
+  //           console.log('WF response ', res) // TODO remove
+  //           complete()
+  //         }
+  //       })
+  //     }, 0)
+  //   } else if (!dateResult.isValid) {
+  //     setTimeout(() => {
+  //       data.status = 'AWF'
+  //       data['DE:System comments'] = 'Dates were inconsistent.  Please check.' // TODO Be a bit more forthcoming with what exactly was wrong.
+  //
+  //       communicator.updateWF(id, data, (err, res) => {
+  //         if (err) {
+  //           complete(err)
+  //         } else {
+  //           console.log('WF response ', res) // TODO remove
+  //           complete()
+  //         }
+  //       })
+  //     }, 0)
+  //   } else {
+  //     // TODO put together rest of store event
+  //     // TODO ensure no empty strings on the fields where iffiness may happen.  NB In this migration, id is a given (so non-empty).
+  //     // NONEMPTY_FIELDS.forEach((field) => {
+  //     //   if (data[field].length === 0) {
+  //     //     body[field] = 'NA'
+  //     //   }
+  //     // })
+  //
+  //     // TODO call eventWriter with approriate callback to call WF to set status to INP or AWF, depending on eventWriter call, then call complete on WF callback
+  //     setTimeout(() => {
+  //       data.status = 'INP'
+  //       data['DE:System comments'] = 'Theoretically, event has been written successfully, though this has not yet been implemented.' // TODO update this message.
+  //
+  //       communicator.updateWF(id, data, (err, res) => {
+  //         if (err) {
+  //           complete(err)
+  //         } else {
+  //           console.log('WF response ', res) // TODO remove
+  //           complete()
+  //         }
+  //       })
+  //     }, 0)
+  //   }
+  // },
 
   /**
    * Sends a cancellation event to the Store Events system for all items keyed by the Workfront id.
@@ -263,8 +282,8 @@ const impl = {
   },
 }
 
-// console.log('Voila, les schemas:', updateSchema, deleteSchema) // TODO remove this
-// kh.registerSchemaMethodPair(createSchema, impl.createHandler)
+console.log('Voila, les schemas:', createSchema, updateSchema, deleteSchema) // TODO remove this
+kh.registerSchemaMethodPair(createSchema, impl.createHandler)
 kh.registerSchemaMethodPair(updateSchema, impl.updateHandler)
 kh.registerSchemaMethodPair(deleteSchema, impl.deleteHandler)
 
