@@ -66,12 +66,12 @@ const impl = {
     // TODO less verbose errors
     if (!ajv.validate(wfEnvelope, eventData)) {
       callback(null, impl.clientError(`Could not validate event as a Workfront subscription event.  Errors: ${ajv.errorsText()}`, eventData))
-    } else if (OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.newState.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.newState.objCode}/1-0-0`, eventData.newState)) { // TODO is this overkill checking here?  Should this be down to the event consumers instead?
+    } else if (eventData.eventType !== 'DELETE' && OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.newState.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.newState.objCode}/1-0-0`, eventData.newState)) {
       callback(null, impl.clientError(`Could not validate the newState payload to the schema for ${eventData.newState.objCode} .  Errors: ${ajv.errorsText()}`, eventData.newState))
     } else if (eventData.eventType === 'CREATE' && Object.keys(eventData.oldState).length === 0) { // a true CREATE event, i.e., no previous state available
       const origin = `workfront/${eventData.newState.objCode}/CREATE/${eventData.newState.categoryID}`
-      eventData.newState.schema = `com.nordstrom/workfront/${eventData.newState.objCode}/${eventData.newState.categoryID}/1-0-0` // NB implicit CREATE by the fact it isn't an UPDATE-objCode and has a categoryID
-      console.log('constructed origin and schema for payload fields', origin, eventData.newState.schema) // TODO remove
+      eventData.newState.schema = `com.nordstrom/${origin}/1-0-0`
+      console.log('constructed schema for payload fields', eventData.newState.schema) // TODO remove
 
       const kinesis = new aws.Kinesis()
       const newEvent = {
@@ -92,37 +92,41 @@ const impl = {
           callback(null, impl.success(data))
         }
       })
-    } else if (OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.oldState.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.oldState.objCode}/1-0-0`, eventData.oldState)) { // TODO is this overkill checking here?  Should this be down to the event consumers instead?
+    } else if (OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.oldState.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.oldState.objCode}/1-0-0`, eventData.oldState)) {
       callback(null, impl.clientError(`Could not validate the oldState payload to the schema for ${eventData.oldState.objCode} .  Errors: ${ajv.errorsText()}`, eventData.oldState))
-    } else if (eventData.oldState.objCode !== eventData.newState.objCode || eventData.oldState.ID !== eventData.newState.ID) { // call out inexplicable changes to state.  This *should* never be satisfied, or something odd is going on with Workfront.
+    } else if (eventData.eventType !== 'DELETE' && (eventData.oldState.objCode !== eventData.newState.objCode || eventData.oldState.ID !== eventData.newState.ID)) { // call out inexplicable changes to state.  This *should* never be satisfied, or something odd is going on with Workfront.
       callback(null, impl.clientError(`Object code or ID has changed for ${eventData.oldState.ID}, ${eventData.oldState.objCode}.`, eventData.newState))
     } else { // NB all routing info like origin or schema are constructed using the oldState, because--if some abuse of Workfront functionality is going on--we either will do nothing or we will reinstate the oldState, which is considered the last ok set of details.
-      let origin = `workfront/${eventData.oldState.objCode}/${eventData.eventType}` // Should reflect whether it was from a WF CREATE or UPDATE
-      let schema = 'com.nordstrom/workfront'
-      // The consumer will need to tinker with the OPTASK schema, which is a bit unfortunate.  Otherwise, we'll need to have the consumer have one method handle all event types.
-      if (eventData.eventType === 'DELETE') { // categoryID not provided for DELETEs, unfortunately.  Means a lot of unnecessary calls to eventWriter to cancel the deal out of dynamo.  Could do a read first, since these are half the throughput of a write.  Guess it depends how many other projects are doing deletes.
-        schema = `${schema}/${eventData.oldState.objCode}/DELETE/1-0-0`
-      } else {
-        origin = `${origin}/${eventData.oldState.categoryID}`
-        schema = `${schema}/UPDATE-${eventData.oldState.objCode}/${eventData.oldState.categoryID}/1-0-0`
-      }
-      console.log('constructed origin and schema for payload fields', origin, schema) // TODO remove
-
+      const origin = `workfront/${eventData.oldState.objCode}/${eventData.eventType}/${eventData.oldState.categoryID}` // Should reflect whether it was from a WF CREATE or UPDATE (or DELETE, though that hasn't a Workfront ambiguity issue)
       const keyId = eventData.oldState.ID
       const objCode = eventData.oldState.objCode
 
-      delete eventData.oldState.ID
-      delete eventData.oldState.objCode
-      delete eventData.newState.ID
-      delete eventData.newState.objCode
+      let schema = 'com.nordstrom/workfront'
+      let updates
+      // The consumer will need to tinker with the OPTASK schema, which is a bit unfortunate.  Otherwise, we'll need to have the consumer have one method handle all event types.
+      if (eventData.eventType === 'DELETE') {
+        schema = `${schema}/${eventData.oldState.objCode}/DELETE/${eventData.oldState.categoryID}/1-0-0`
 
-      const updates = {
-        schema,
-        ID: keyId,
-        objCode,
-        oldState: eventData.oldState,
-        newState: eventData.newState,
+        eventData.oldState.schema = schema
+
+        updates = eventData.oldState
+      } else {
+        schema = `${schema}/UPDATE-${eventData.oldState.objCode}/${eventData.eventType}/${eventData.oldState.categoryID}/1-0-0`
+
+        delete eventData.oldState.ID
+        delete eventData.oldState.objCode
+        delete eventData.newState.ID
+        delete eventData.newState.objCode
+
+        updates = {
+          schema,
+          ID: keyId,
+          objCode,
+          oldState: eventData.oldState,
+          newState: eventData.newState,
+        }
       }
+      console.log('constructed origin and schema for payload fields', origin, schema) // TODO remove
 
       const kinesis = new aws.Kinesis()
       const newEvent = {

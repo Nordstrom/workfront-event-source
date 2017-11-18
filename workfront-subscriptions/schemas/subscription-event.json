@@ -11,24 +11,10 @@
     "eventType":  { "type": "string", "enum": ["CREATE", "DELETE", "UPDATE", "SHARE"] },
     "subscriptionId": { "type": "string"},
     "newState": {
-      "type": "object",
-      "properties": {
-        "ID": { "type": "string"},
-        "objCode":  { "type": "string", "enum": ["USER", "PORT", "PRGM", "PROJ", "TASK", "OPTASK", "TMPL", "PTLSEC", "PTLTAB", "CMPY", "DOCU", "NOTE"] }
-      },
-      "required": [
-        "ID",
-        "objCode"
-      ],
-      "additionalProperties": true
+      "$ref":"#/definitions/workfrontObject"
     },
     "oldState": {
-      "type": "object",
-      "properties": {
-        "ID": { "type": "string"},
-        "objCode":  { "type": "string", "enum": ["USER", "PORT", "PRGM", "PROJ", "TASK", "OPTASK", "TMPL", "PTLSEC", "PTLTAB", "CMPY", "DOCU", "NOTE"] }
-      },
-      "additionalProperties": true
+      "$ref":"#/definitions/workfrontObject"
     },
     "eventTime": {
       "type": "object",
@@ -41,6 +27,16 @@
         "epochSecond"
       ],
       "additionalProperties": false
+    }
+  },
+  "definitions":{
+    "workfrontObject": {
+      "type": "object",
+      "properties": {
+        "ID": { "type": "string"},
+        "objCode":  { "type": "string", "enum": ["USER", "PORT", "PRGM", "PROJ", "TASK", "OPTASK", "TMPL", "PTLSEC", "PTLTAB", "CMPY", "DOCU", "NOTE"] }
+      },
+      "additionalProperties": true
     }
   },
   "required": [

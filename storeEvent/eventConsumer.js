@@ -31,16 +31,14 @@ const transformer = (payload, record) => {
 
 const kh = new KH.KinesisSynchronousHandler(eventSchema, constants.MODULE, transformer)
 
-// make needed versions of schemas
-// TODO If we don't want to mess about with the schemas here, we need to provide one of each in the workfront-subscriptions,
-// which gets quite cluttered and would ideally have the family relate to one parent, rather than multiple copies of mostly the same thing.
+// TODO If we don't want to mess about with the schemas here, we need to provide one of each in the workfront-subscriptions.
 const issueSchema = wf.getPayloadSchema(process.env.OBJ_CODE)
 const createHeader = Object.assign({}, issueSchema.self)
-createHeader.name = `${createHeader.name}/${process.env.CATEGORY_ID}`
+createHeader.name = `${createHeader.name}/CREATE/${process.env.CATEGORY_ID}`
 const createSchema = Object.assign({}, issueSchema)
 createSchema.self = createHeader
 const deleteHeader = Object.assign({}, issueSchema.self)
-deleteHeader.name = `${deleteHeader.name}/DELETE`
+deleteHeader.name = `${deleteHeader.name}/DELETE/${process.env.CATEGORY_ID}`
 const deleteSchema = Object.assign({}, issueSchema) // Can't filter with current WF functionality for DELETEs.
 deleteSchema.self = deleteHeader
 const updateIssueSchema = wf.getUpdatePayloadSchema(process.env.OBJ_CODE, 'UPDATE')
@@ -53,10 +51,10 @@ updateSchema.self = updateHeader
  * Example event:
    {
        "schema": "com.nordstrom/workfront/stream-ingress/1-0-0",
-       "origin": "workfront/subscription/OPTASK/UPDATE",
+       "origin": "workfront/OPTASK/CREATE/599dabf700504b54e8db78f508611b55",
        "timeOrigin": "2017-02-28T23:29:20.171Z",
        "data" : {
-          "schema": "com.nordstrom/workfront/OPTASK/UPDATE/599db3ec00552b4b5a7e9216d1585a83/1-0-0",
+          "schema": "com.nordstrom/workfront/OPTASK/CREATE/599dabf700504b54e8db78f508611b55/1-0-0",
           "ID":"59d671ae00600afe20334b6936cd785c",
           "name":"Lauren Testing Migration of EIM Event ID 44444",
           "objCode":"OPTASK",
