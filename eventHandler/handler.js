@@ -111,7 +111,7 @@ const impl = {
 
         updates = eventData.oldState
       } else {
-        schema = `${schema}/UPDATE-${eventData.oldState.objCode}/${eventData.eventType}/${eventData.oldState.categoryID}/1-0-0`
+        schema = `${schema}/UPDATE-${eventData.oldState.objCode}/${eventData.oldState.categoryID}/1-0-0`
 
         delete eventData.oldState.ID
         delete eventData.oldState.objCode
