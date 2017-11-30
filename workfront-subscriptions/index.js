@@ -7,6 +7,9 @@ const streamEgressSchema = require('./schemas/stream-egress.json')
 const wfSchemas = {
   OPTASK: require('./schemas/OPTASK.json'), // eslint-disable-line global-require
   TASK: require('./schemas/TASK.json'), // eslint-disable-line global-require
+  UPDATE: {
+    OPTASK: require('./schemas/UPDATE-OPTASK.json'), // eslint-disable-line global-require
+  },
   // TODO add the rest
 }
 
@@ -77,6 +80,14 @@ const impl = (apiKey, subscriptionsURL, subscribedObjCodes, subscribedEventTypes
     }
   }
 
+  const getUpdatePayloadSchema = (objCode, eventType) => {
+    if (objCode && objCodes.indexOf(objCode) > -1 && eventType && eventTypes.indexOf(eventType)) {
+      return wfSchemas[eventType][objCode]
+    } else {
+      return null
+    }
+  }
+
   const getEnvelopeSchema = () => envelopeSchema
 
   const getStreamSchema = () => streamEgressSchema
@@ -89,6 +100,7 @@ const impl = (apiKey, subscriptionsURL, subscribedObjCodes, subscribedEventTypes
     subscribeToEvent,
     deleteSubscription,
     getPayloadSchema,
+    getUpdatePayloadSchema,
     getEnvelopeSchema,
     getStreamSchema,
     getObjCodes,

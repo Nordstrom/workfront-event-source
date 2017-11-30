@@ -1,37 +1,29 @@
-// NB Many of the comments become irrelevant IF the new release of Workfront turns out to provide old state and new state in the way we hope.
+
 
 const KH = require('kinesis-handler') // eslint-disable-line import/no-unresolved
 const WF = require('workfront-subscriptions')
 const communicator = require('./lib/communicator')
 
-const wf = WF(process.env.API_KEY, process.env.API_ENDPOINT, process.env.OBJ_CODE, process.env.EVENT_TYPES)
-
-const eventSchema = wf.getStreamSchema()
-const issueSchema = wf.getPayloadSchema(process.env.OBJ_CODE)
-// TODO If we don't want to mess about with the schemas here, we need to provide one of each in the workfront-subscriptions,
-// which gets quite cluttered and would ideally have the family relate to one parent, rather than multiple copies of mostly the same thing.
-// const createHeader = Object.assign({}, issueSchema.self)
-const updateHeader = Object.assign({}, issueSchema.self)
-const deleteHeader = Object.assign({}, issueSchema.self)
-// createHeader.name `${createHeader.name}/CREATE/${process.env.CATEGORY_ID}`
-updateHeader.name = `${updateHeader.name}/UPDATE/${process.env.CATEGORY_ID}`
-deleteHeader.name = `${deleteHeader.name}/DELETE`
-// const createSchema = Object.assign({}, issueSchema)
-const updateSchema = Object.assign({}, issueSchema)
-const deleteSchema = Object.assign({}, issueSchema)
-// createSchema.self = createHeader
-updateSchema.self = updateHeader
-deleteSchema.self = deleteHeader
-
 const constants = {
   // self
   MODULE: 'storeEvent/eventConsumer.js',
   NONE: 'NONE',
-  // methods
-  METHOD_GENERATE_STORE_EVENTS: 'createHandler',
-  // Workfront ApiKey
+  // Workfront
   APIKEY: process.env.API_KEY,
+  FIELDS: process.env.FORM_FIELDS.split('|'),
+  CATEGORY_ID: process.env.CATEGORY_ID,
+  MESSAGE: {
+    REMOVE: 'Do not remove the custom form from the Issue.  Use the menu to Delete the Issue: ',
+    SWITCH: 'To switch the custom form for the Issue, use the menu first to Delete the existing Issue, then create a New Issue for: ',
+    STORES: 'Recently entered List of Stores was not a string, and changes were not processed to Store Events.  Please correct and re-submit.', // TODO message may change or be unnecessary, depending on form
+    DATES: 'Recently entered Dates were inconsistent, and changes were not processed to Store Events.  Please correct and re-submit.', // TODO message may change or be unnecessary, depending on form
+    GOOD: 'Theoretically, event has been written successfully, though this has not yet been implemented.', // TODO update this message.
+    BAD: 'An error occurred while attempting an update of Store Events with your changes.  Contact the Store team, citing this issue number: ',
+  },
 }
+
+const wf = WF(process.env.API_KEY, process.env.API_ENDPOINT, process.env.OBJ_CODE, process.env.EVENT_TYPES)
+const eventSchema = wf.getStreamSchema()
 
 /**
  * Transform record (which will be of the form in ingress schema) to the form of egress schema
@@ -47,14 +39,30 @@ const transformer = (payload, record) => {
 
 const kh = new KH.KinesisSynchronousHandler(eventSchema, constants.MODULE, transformer)
 
+// TODO If we don't want to mess about with the schemas here, we need to provide one of each in the workfront-subscriptions.
+const issueSchema = wf.getPayloadSchema(process.env.OBJ_CODE)
+const createHeader = Object.assign({}, issueSchema.self)
+createHeader.name = `${createHeader.name}/CREATE/${constants.CATEGORY_ID}`
+const createSchema = Object.assign({}, issueSchema)
+createSchema.self = createHeader
+const deleteHeader = Object.assign({}, issueSchema.self)
+deleteHeader.name = `${deleteHeader.name}/DELETE/${constants.CATEGORY_ID}`
+const deleteSchema = Object.assign({}, issueSchema) // Can't filter with current WF functionality for DELETEs.
+deleteSchema.self = deleteHeader
+const updateIssueSchema = wf.getUpdatePayloadSchema(process.env.OBJ_CODE, 'UPDATE')
+const updateHeader = Object.assign({}, updateIssueSchema.self)
+updateHeader.name = `${updateHeader.name}/${constants.CATEGORY_ID}`
+const updateSchema = Object.assign({}, updateIssueSchema)
+updateSchema.self = updateHeader
+
 /**
  * Example event:
    {
        "schema": "com.nordstrom/workfront/stream-ingress/1-0-0",
-       "origin": "workfront/subscription/OPTASK/UPDATE",
+       "origin": "workfront/OPTASK/CREATE/599dabf700504b54e8db78f508611b55",
        "timeOrigin": "2017-02-28T23:29:20.171Z",
        "data" : {
-          "schema": "com.nordstrom/workfront/OPTASK/UPDATE/599db3ec00552b4b5a7e9216d1585a83/1-0-0",
+          "schema": "com.nordstrom/workfront/OPTASK/CREATE/599dabf700504b54e8db78f508611b55/1-0-0",
           "ID":"59d671ae00600afe20334b6936cd785c",
           "name":"Lauren Testing Migration of EIM Event ID 44444",
           "objCode":"OPTASK",
@@ -136,105 +144,212 @@ const impl = {
     }
   },
 
+  extract: (form) => {
+    const result = {}
+
+    for (let i = 0; i < constants.FIELDS.length; i++) {
+      if (form[`DE:${constants.FIELDS[i]}`]) {
+        result[`DE:${constants.FIELDS[i]}`] = form[`DE:${constants.FIELDS[i]}`]
+      }
+    }
+
+    return result
+  },
+
+  /**
+   * Returns true if b matches a on the fields in a.  if exact is true, only returns true if they match each other field by field and have the same fields.
+   * Works only on objects consisting only in fields with the following types: Boolean, Null, Undefined, Number, String.
+   * Likely to fail on Objects and Arrays, unless they point to the same thing.
+   * @param a
+   * @param b
+   * @param exact
+   * @returns {boolean}
+   */
+  compareTwoObjectsWithPrimitiveFields: (a, b, exact) => {
+    const keysA = Object.keys(a)
+    const keysB = Object.keys(b)
+
+    if (keysA.length > keysB.length || (exact && keysA.length < keysB.length)) return false
+
+    for (let i = 0; i < keysA.length; i++) {
+      const field = keysA[i]
+      if (keysB.indexOf(field) === -1) {
+        console.log('Failed to find: ', field)
+        return false
+      }
+      if (b[field] !== a[field]) {
+        console.log('Diff found: ', b[field], a[field])
+        return false
+      }
+    }
+
+    return true
+  },
+
   /**
    * Sends a create event to the Store Events system for all items keyed by the Workfront id and the store number, for each store number in the List of Stores.
    *
-   * NB Actually, this should not be triggered directly by a Workfront event.  It is dangerous to respond to CREATEs from Workfront because these are generated by POSTing to the API, by using the New Issue
-   * button on the GUI, by copying from the GUI (in some half-baked state), and by any entry into a previously unpopulated field in an ALREADY existing issue.
-   * The last two cases are dangerous, particularly the final one, which implies you want to CREATE an already existing deal, with an already existing ID.
-   * This wouldn't be a problem if you checked the Store Events endpoint before doing anything, but then that's just what you do on an update anyway, so might
-   * as well just handle it all through UPDATE, which allows you to get around the third case a bit by allowing the user to signal he is ready to "commit".
+   * NB Relies on the cleaning done by eventHandler of Workfront events before placing on stream so that CREATE events are truly CREATEs and
+   * not just an update to a previously empty field, masquerading as a CREATE.
    *
    * @param event The event to create in Store Events (since it has been newly created from Workfront, with a new Workfront id).
    * @param complete The callback to inform of completion, with optional error parameter.
    */
-  // createHandler: (event, complete) => {
-  //   // TODO put together rest of store event
-  //   // TODO ensure no empty strings on the fields where iffiness may happen.  NB In this migration, id is a given (so non-empty).
-  //   // NONEMPTY_FIELDS.forEach((field) => {
-  //   //   if (data[field].length === 0) {
-  //   //     body[field] = 'NA'
-  //   //   }
-  //   // })
-  //   // TODO call eventWriter with approriate callback to call WF to set status to INP or AWF, depending on eventWriter call, then call complete on WF callback
-  // },
+  createHandler: (event, complete) => {
+    console.log('Received a CREATE event.  Code not implemented.') // TODO remove
+    setTimeout(() => complete(), 0) // TODO remove
+
+    // TODO put together rest of store event
+    // TODO ensure no empty strings on the fields where iffiness may happen.  NB In this migration, id is a given (so non-empty).
+    // NONEMPTY_FIELDS.forEach((field) => {
+    //   if (data[field].length === 0) {
+    //     body[field] = 'NA'
+    //   }
+    // })
+    // TODO call eventWriter with approriate callback to call WF to set status to INP or AWF, depending on eventWriter call, then call complete on WF callback
+  },
 
   /**
-   * Assesses event from Workfront with respect to the current state of the Store Events system for all items keyed by the Workfront id.
+   * Assesses event from Workfront with respect to the current state of the Store Events system for all items keyed by the Workfront id, unless WF comes through with oldState/newState.
    *
-   * If none are found, then we need to create the Store Event, by calling createHandler.
+   * If none are found, then this is rather troubling and error should be thrown.
    *
    * If an event is found, for those store numbers N_SE currently in the Store Events system and those store numbers N_WF from the List of Stores field in the Workfront event,
    * the following action os taken.
    *
    * If n is in N_SE but not in N_WF, send a cancellation for that id-storeNumber pair.
    * If n is not in N_SE but is in N_WF, send a create event for that id-storeNumber pair.
-   * Otherwise, send an update for that id-storeNumber pair.  Just overwrite everything.  TODO send just the diff, which would reduce chance of formatting changes and size of Dynamo DB update, but doubtful if this is material at the moment.
+   * For the rest, send an update for that id-storeNumber pair.  Just overwrite everything.  TODO send just the diff, which would reduce chance of formatting changes and size of Dynamo DB update, but doubtful if this is material at the moment.
    *
    * @param event The event to handle into Store Events.
    * @param complete The callback to inform of completion, with optional error parameter.
    */
   updateHandler: (event, complete) => {
     const id = event.data.ID
-    const form = event.data.parameterValues
-    const storeResult = impl.makeAndCheckListOfStores(form)
-    const dateResult = impl.makeAndCheckDates(form)
+    const oldForm = event.data.oldState.parameterValues
+    const newForm = event.data.newState.parameterValues
 
-    const data = {
-      apiKey: constants.APIKEY,
-    }
+    // let priorErr
+    // const jointCallback = (err) => {
+    //   if (priorErr === undefined) { // first update result
+    //     if (err) {
+    //       priorErr = err
+    //     } else {
+    //       priorErr = false
+    //     }
+    //   } else if (priorErr && err) { // second update result, if an error was previously received and we have a new one
+    //     complete(`Update Handler - errors while taking action on event AND while notifying user: ${[priorErr, err]}`)
+    //   } else if (priorErr || err) {
+    //     complete(`Update Handler - error while taking action on event OR while notifying user: ${priorErr || err}`)
+    //   } else { // second update result, if error was not previously seen.
+    //     complete()
+    //   }
+    // }
 
-    if (!storeResult.isValid) {
-      setTimeout(() => {
-        data.status = 'AWF'
-        data['DE:System comments'] = 'List of Stores was not a string.' // TODO Be a bit more forthcoming if you do implement store validation of some sort.
+    if (Object.keys(oldForm).length === 0) {
+      // ignore--would only accept this in a CREATE and its presence in an UPDATE indicates a transitory state at best or non-conforming user behavior
+      console.log('Previous form state was empty.  This should only happen in a CREATE event, yet this is an UPDATE.  Skipping event.')
+      setTimeout(() => complete(), 0)
+    } else if (Object.keys(newForm).length === 0) {
+      console.log('Incorrect user behavior: form removed from Issue, rather than Issue being deleted.  Attempting to restore old state and to message user.  No change to Store Events.')
 
-        communicator.updateWF(id, data, (err, res) => {
-          if (err) {
-            complete(err)
+      const goodBits = impl.extract(oldForm)
+      goodBits.categoryID = event.data.oldState.categoryID
+      goodBits.apiKey = constants.APIKEY
+      console.log('restore with ', goodBits)
+      communicator.updateWF(id, goodBits, (err, res) => {
+        let message = `${constants.MESSAGE.REMOVE}${event.data.oldState.name}`
+        if (err || res.error) {
+          console.log('WARNING: WF encountered error while trying to restore form.  Form not restored.  Error: ', err || res.error)
+          message = `${message}.  The Issue is in a corrupted state and must now be Deleted.`
+        } else {
+          console.log('WF response on restoring form: ', res)
+        }
+
+        communicator.sendMessage(id, message, constants.APIKEY, (error, response) => {
+          if (error || response.error) {
+            console.log('WARNING: WF encountered error while messaging about invalid removal of form. Error: ', error || response.error)
           } else {
-            console.log('WF response ', res) // TODO remove
-            complete()
+            console.log('WF response on sending Note regarding invalid removal of form: ', response)
           }
-        })
-      }, 0)
-    } else if (!dateResult.isValid) {
-      setTimeout(() => {
-        data.status = 'AWF'
-        data['DE:System comments'] = 'Dates were inconsistent.  Please check.' // TODO Be a bit more forthcoming with what exactly was wrong.
 
-        communicator.updateWF(id, data, (err, res) => {
-          if (err) {
-            complete(err)
-          } else {
-            console.log('WF response ', res) // TODO remove
-            complete()
-          }
+          complete() // NB Best efforts only on correcting behavior that is meant to be impossible, due to only one custom form being available for this queue topic.
         })
-      }, 0)
+      })
+    } else if (event.data.oldState.categoryID !== event.data.newState.categoryID) {
+      console.log('Incorrect user behavior: form changed within same Issue, rather than Issue being deleted and new Issue being created.  Attempting to restore old categoryID and old state and to message user.  No change to Store Events.')
+
+      const goodBits = impl.extract(oldForm)
+      goodBits.categoryID = event.data.oldState.categoryID
+      goodBits.apiKey = constants.APIKEY
+      console.log('restore with ', goodBits)
+      communicator.updateWF(id, goodBits, (err, res) => {
+        let message = `${constants.MESSAGE.SWITCH}${event.data.oldState.name}`
+        if (err || res.error) {
+          console.log('WARNING: WF encountered error while trying to restore form.  Form not restored.  Error: ', err || res.error)
+          message = `${message}.  The Issue is in a corrupted state and must now be Deleted.`
+        } else {
+          console.log('WF response on restoring form: ', res)
+        }
+
+        communicator.sendMessage(id, message, constants.APIKEY, (error, response) => {
+          if (error || response.error) {
+            console.log('WARNING: WF encountered error while messaging about invalid switching of form. Error: ', error || response.error)
+          } else {
+            console.log('WF response on sending Note regarding invalid switching of form: ', response)
+          }
+
+          complete() // NB Best efforts only on correcting behavior that is meant to be impossible, due to only one custom form being available for this queue topic.
+        })
+      })
     } else {
-      // TODO put together rest of store event
-      // TODO ensure no empty strings on the fields where iffiness may happen.  NB In this migration, id is a given (so non-empty).
-      // NONEMPTY_FIELDS.forEach((field) => {
-      //   if (data[field].length === 0) {
-      //     body[field] = 'NA'
-      //   }
-      // })
+      const goodBitsOld = impl.extract(oldForm)
+      const goodBitsNew = impl.extract(newForm)
+      if (impl.compareTwoObjectsWithPrimitiveFields(goodBitsOld, goodBitsNew, true)) {
+        console.log('No changes in form.  Skipping event.')
+        setTimeout(() => complete(), 0)
+      } else {
+        const storeResult = impl.makeAndCheckListOfStores(goodBitsNew)
+        const dateResult = impl.makeAndCheckDates(goodBitsNew)
 
-      // TODO call eventWriter with approriate callback to call WF to set status to INP or AWF, depending on eventWriter call, then call complete on WF callback
-      setTimeout(() => {
-        data.status = 'INP'
-        data['DE:System comments'] = 'Theoretically, event has been written successfully, though this has not yet been implemented.' // TODO update this message.
+        if (!storeResult.isValid) {
+          communicator.sendMessage(id, constants.MESSAGE.STORES, constants.APIKEY, (err, res) => {
+            if (err || res.error) {
+              console.log('WF encountered error messaging about invalid stores.')
+              complete(err || res.error)
+            } else {
+              console.log('WF response on sending Note regarding invalid stores ', res)
+              complete()
+            }
+          })
+        } else if (!dateResult.isValid) {
+          communicator.sendMessage(id, constants.MESSAGE.DATES, constants.APIKEY, (err, res) => {
+            if (err || res.error) {
+              console.log('WF encountered error messaging about invalid dates.')
+              complete(err || res.error)
+            } else {
+              console.log('WF response on sending Note regarding invalid dates ', res)
+              complete()
+            }
+          })
+        } else {
+          // TODO process diffs between goodBitsOld and goodBitsNew, as follows:
+          // If n is in oldListOfStores but not in newListOfStores, send a cancellation for that id-storeNumber pair.
+          // If n is not in oldListOfStores but is in newListOfStores, send a create event for that id-storeNumber pair.
+          // For the rest, send an update for that id-storeNumber pair.  Just send the newState for those fields with diffs, or maybe just send the whole newState, might be safer.
 
-        communicator.updateWF(id, data, (err, res) => {
-          if (err) {
-            complete(err)
-          } else {
-            console.log('WF response ', res) // TODO remove
-            complete()
-          }
-        })
-      }, 0)
+          // TODO call eventWriter with appropriate callback and depending on Store Events eventWriter call, send Note saying what happened, and *then* call complete on WF Note callback
+          communicator.sendMessage(id, constants.MESSAGE.GOOD, constants.APIKEY, (err, res) => {
+            if (err || res.error) {
+              console.log('WF encountered error messaging about successful update of Store Events.')
+              complete(err || res.error)
+            } else {
+              console.log('WF response on sending Note regarding successful update of Store Events ', res)
+              complete()
+            }
+          })
+        }
+      }
     }
   },
 
@@ -263,8 +378,8 @@ const impl = {
   },
 }
 
-// console.log('Voila, les schemas:', updateSchema, deleteSchema) // TODO remove this
-// kh.registerSchemaMethodPair(createSchema, impl.createHandler)
+console.log('Voila, les schemas:', createSchema, updateSchema, deleteSchema) // TODO remove this
+kh.registerSchemaMethodPair(createSchema, impl.createHandler)
 kh.registerSchemaMethodPair(updateSchema, impl.updateHandler)
 kh.registerSchemaMethodPair(deleteSchema, impl.deleteHandler)
 

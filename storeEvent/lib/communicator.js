@@ -2,7 +2,7 @@
 
 const aws = require('aws-sdk') // eslint-disable-line import/no-unresolved, import/no-extraneous-dependencies
 const https = require('https')
-const querystring = require('querystring')
+const querystring = require('querystring') // TODO querystring stringifies dates with quote marks, as strings, which won't work if the custom form is using the calendar form
 
 const constants = {
   STORE_EVENTS: {
@@ -17,7 +17,8 @@ const constants = {
       hostName: process.env.WF_HOSTNAME,
       path: process.env.WF_PATH,
     },
-    VERB: 'PUT',
+    UPDATE_VERB: 'PUT',
+    CREATE_VERB: 'POST',
   },
 }
 
@@ -61,7 +62,7 @@ const impl = {
   //   const apiKey = constants.STORE_EVENTS.STOTE_EVENTS_API_KEY
   // },
 
-  updateWF: (id, data, callback) => {
+  updateWFIssue: (id, data, callback) => {
     // e.g., data = {
     //   apiKey,
     //   status,
@@ -70,8 +71,34 @@ const impl = {
 
     const options = {
       hostname: constants.WF.URL.hostName,
-      path: `${constants.WF.URL.path}/${id}?${querystring.stringify(data)}`,
-      method: constants.WF.VERB,
+      path: `${constants.WF.URL.path}issue/${id}?${querystring.stringify(data)}`,
+      method: constants.WF.UPDATE_VERB,
+    }
+
+    const postRequest = https.request(options, (response) => {
+      let result = ''
+      response.on('data', d => (result += d)) // eslint-disable-line  no-return-assign
+      response.on('end', () => callback(null, result))
+      response.on('error', error => callback(error))
+    })
+
+    // postRequest.write(data)  // NB Workfront does not use body, but rather query parameters
+    postRequest.end()
+  },
+
+  createNoteForIssue: (issueId, noteText, apiKey, callback) => {
+    const data = {
+      noteObjCode: 'OPTASK',
+      objID: issueId,
+      opTaskID: issueId,
+      noteText,
+      apiKey,
+    }
+
+    const options = {
+      hostname: constants.WF.URL.hostName,
+      path: `${constants.WF.URL.path}note?${querystring.stringify(data)}`,
+      method: constants.WF.CREATE_VERB,
     }
 
     const postRequest = https.request(options, (response) => {
@@ -87,5 +114,6 @@ const impl = {
 }
 
 module.exports = {
-  updateWF: impl.updateWF,
+  updateWF: impl.updateWFIssue,
+  sendMessage: impl.createNoteForIssue,
 }
