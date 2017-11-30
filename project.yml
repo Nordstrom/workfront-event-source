@@ -37,4 +37,4 @@ storeEvent:
     path: /${self:custom.project.storeEvent.stage}/${self:custom.project.storeEvent.reader.method}/
   workfront:
     hostname: ${self:custom.private.WF.apiHostname}
-    path: /attask/api/v7.0/issue # we're using Issues in Workfront (OPTASK)
+    path: /attask/api/v7.0/ # we're using Issues in Workfront (OPTASK)
