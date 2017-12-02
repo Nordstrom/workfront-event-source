@@ -22,7 +22,9 @@ const constants = {
   },
 }
 
-const wf = WF(process.env.API_KEY, process.env.API_ENDPOINT, process.env.OBJ_CODE, process.env.EVENT_TYPES)
+const temp = process.env.EVENT_TYPES.split('|')
+const pairs = temp.map(x => `${process.env.OBJ_CODE}-${x}`)
+const wf = WF(process.env.API_KEY, process.env.API_ENDPOINT, pairs.join('|'))
 const eventSchema = wf.getStreamSchema()
 
 /**

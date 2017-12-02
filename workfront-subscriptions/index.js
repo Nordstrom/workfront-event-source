@@ -3,7 +3,7 @@ const envelopeSchema = require('./schemas/subscription-event.json')
 const streamEgressSchema = require('./schemas/stream-egress.json')
 
 // NB OPTASK schema needs to be ok with more nulls; e.g., email issues don't use all the fields that store events does.
-// TODO really, these schemas all need some investigation
+// TODO these schemas all need some investigation
 const wfSchemas = {
   OPTASK: require('./schemas/OPTASK.json'), // eslint-disable-line global-require
   TASK: require('./schemas/TASK.json'), // eslint-disable-line global-require
@@ -19,24 +19,27 @@ const WF_CONSTANTS = {
   eventTypes: ['CREATE', 'DELETE', 'UPDATE', 'SHARE'],
 }
 
-const impl = (apiKey, subscriptionsURL, subscribedObjCodes, subscribedEventTypes) => {
+const impl = (apiKey, subscriptionsURL, subscribedPairs) => {
   const objCodes = []
   const eventTypes = []
+  const pairs = []
 
-  if (typeof subscribedObjCodes === 'string') {
-    const candidates = subscribedObjCodes.split('|')
+  if (typeof subscribedPairs === 'string') {
+    const candidates = subscribedPairs.split('|')
     for (let i = 0; i < candidates.length; i++) {
-      if (WF_CONSTANTS.objCodes.indexOf(candidates[i]) > -1 && wfSchemas[candidates[i]]) {
-        objCodes.push(candidates[i])
-      }
-    }
-  }
-
-  if (typeof subscribedEventTypes === 'string') {
-    const candidates = subscribedEventTypes.split('|')
-    for (let i = 0; i < candidates.length; i++) {
-      if (WF_CONSTANTS.eventTypes.indexOf(candidates[i]) > -1) {
-        eventTypes.push(candidates[i])
+      const cand = candidates[i].split('-')
+      if (cand.length === 2 && WF_CONSTANTS.objCodes.indexOf(cand[0]) > -1 && wfSchemas[cand[0]] && WF_CONSTANTS.eventTypes.indexOf(cand[1]) > -1) {
+        if (objCodes.indexOf(cand[0]) === -1) {
+          objCodes.push(cand[0])
+        }
+        if (eventTypes.indexOf(cand[1]) === -1) {
+          eventTypes.push(cand[1])
+        }
+        if (pairs.indexOf(candidates[i]) === -1) {
+          pairs.push(candidates[i])
+        }
+      } else {
+        console.log(`WARNING: pair ${candidates[i]} does not have the correct format.  Skipping.  Workfront Subscription handler will not handle this pair.`)
       }
     }
   }
@@ -72,6 +75,15 @@ const impl = (apiKey, subscriptionsURL, subscribedObjCodes, subscribedEventTypes
     return fetch(`${subscriptionsURL}/${subscriptionId}`, options)
   }
 
+  const getAllSubscriptions = () => {
+    const options = {
+      method: 'GET',
+      headers: { Authorization: apiKey },
+    }
+
+    return fetch(`${subscriptionsURL}/list`, options)
+  }
+
   const getPayloadSchema = (objCode) => {
     if (objCode && objCodes.indexOf(objCode) > -1) {
       return wfSchemas[objCode]
@@ -96,15 +108,19 @@ const impl = (apiKey, subscriptionsURL, subscribedObjCodes, subscribedEventTypes
 
   const getEventTypes = () => eventTypes
 
+  const getObjEventPairs = () => pairs
+
   return {
     subscribeToEvent,
     deleteSubscription,
+    getAllSubscriptions,
     getPayloadSchema,
     getUpdatePayloadSchema,
     getEnvelopeSchema,
     getStreamSchema,
     getObjCodes,
     getEventTypes,
+    getObjEventPairs,
   }
 }
 

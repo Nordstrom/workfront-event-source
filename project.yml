@@ -15,8 +15,10 @@ stream:
 
 eventHandler:
   name: ${self:custom.stage}-${self:custom.project.name}-eventHandler
-  objCodes: OPTASK # pipe-separated, e.g., USER|PORT|PRGM|PROJ|TASK|OPTASK|TMPL|PTLSEC|PTLTAB|CMPY|DOCU|NOTE # TODO subscribe multi
-  eventTypes: CREATE # pipe-separated, e.g.,CREATE|DELETE|UPDATE|SHARE # TODO subscribe multi and deal with re-subscription of same thing on future deploys
+  objCodeEventTypePairs: OPTASK-CREATE|OPTASK-UPDATE|OPTASK-DELETE
+  # whole sets, for reference
+  #objCodes: USER|PORT|PRGM|PROJ|TASK|OPTASK|TMPL|PTLSEC|PTLTAB|CMPY|DOCU|NOTE
+  #eventTypes: CREATE|DELETE|UPDATE|SHARE
 
 storeEvent:
   name: ${self:custom.stage}-${self:custom.project.name}-storeEvent

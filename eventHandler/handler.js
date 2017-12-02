@@ -4,7 +4,7 @@ const aws = require('aws-sdk') // eslint-disable-line import/no-unresolved, impo
 
 const WF = require('workfront-subscriptions')
 
-const wf = WF(process.env.WFAPI_KEY, process.env.WFAPI_ENDPOINT, process.env.WFOBJ_CODES, process.env.WFEVENT_TYPES)
+const wf = WF(process.env.WFAPI_KEY, process.env.WFAPI_ENDPOINT, process.env.WFOBJ_CODES_EVENT_TYPES)
 
 const AJV = require('ajv')
 

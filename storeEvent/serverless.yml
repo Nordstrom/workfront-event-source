@@ -28,7 +28,7 @@ functions:
     environment:
       API_KEY: ${self:custom.private.WF.apiKey}
       API_ENDPOINT: ${self:custom.private.WF.apiEndpoint} # not really used (just to instantiate a wf object to grab the schemas)
-      OBJ_CODE: OPTASK # Store Events Consumer is only interested in Issues (OPTASK)
+      OBJ_CODE: OPTASK # Store Events Consumer is only interested in Issues (OPTASK).  This consumer is expected to be dedicated to a single Object Code.
       EVENT_TYPES: CREATE|UPDATE|DELETE # Store Events Consumer ignores SHARE, which seems to just add ids to the accessorIDs array, which doesn't affect StoreEvents content.  CREATEs are generated on entering a New Issue, on copying, and on populating any previously empty field; too ambiguous.
       FORM_FIELDS: 'In-Store Event Name|Store Event Description|Event Start|Event End|List of Stores|RSVP?'
       CATEGORY_ID: ${self:custom.private.WF.categoryID}
