@@ -12,16 +12,20 @@
     "sls": "./build/2.sls.sh",
 
     "root:install": "npm run env && npm run ins -- \"Installing Top-Level Project Dependencies\"                       .",
-    "root:install:all":"npm run root:install && npm run eventHandler:install",
-    "root:deploy:all": "npm run stream:deploy && npm run eventHandler:deploy",
-    "root:remove:all": "npm run eventHandler:remove && npm run stream:remove",
+    "root:install:all":"npm run root:install && npm run eventHandler:install && npm run storeEvent:install",
+    "root:deploy:all": "npm run stream:deploy && npm run eventHandler:deploy && npm run storeEvent:deploy",
+    "root:remove:all": "npm run storeEvent:remove && npm run eventHandler:remove && npm run stream:remove",
 
     "stream:deploy": "npm run env && npm run sls -- deploy \"Deploying Workfront Event Stream\"                        ./stream",
     "stream:remove": "npm run env && npm run sls -- remove \"Removing Workfront Event Stream\"                         ./stream",
 
     "eventHandler:install": "npm run env && npm run ins -- \"Installing Event Handler Dependencies\"                   ./eventHandler",
     "eventHandler:deploy": "npm run env && npm run sls -- deploy \"Deploying Event Handler\"                           ./eventHandler",
-    "eventHandler:remove": "npm run env && npm run sls -- remove \"Removing Event Handler\"                            ./eventHandler"
+    "eventHandler:remove": "npm run env && npm run sls -- remove \"Removing Event Handler\"                            ./eventHandler",
+
+    "storeEvent:install": "npm run env && npm run ins -- \"Installing Store Event Dependencies\"                       ./storeEvent",
+    "storeEvent:deploy": "npm run env && npm run sls -- deploy \"Deploying Store Event\"                               ./storeEvent",
+    "storeEvent:remove": "npm run env && npm run sls -- remove \"Removing Store Event\"                                ./storeEvent"
   },
   "pre-commit": [
     "lint"

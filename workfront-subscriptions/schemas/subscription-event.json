@@ -10,23 +10,41 @@
   "properties": {
     "eventType":  { "type": "string", "enum": ["CREATE", "DELETE", "UPDATE", "SHARE"] },
     "subscriptionId": { "type": "string"},
-    "fields": {
+    "newState": {
+      "$ref":"#/definitions/workfrontObject"
+    },
+    "oldState": {
+      "$ref":"#/definitions/workfrontObject"
+    },
+    "eventTime": {
+      "type": "object",
+      "properties": {
+        "nano": { "type": "number"},
+        "epochSecond": { "type": "number"}
+      },
+      "required": [
+        "nano",
+        "epochSecond"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "definitions":{
+    "workfrontObject": {
       "type": "object",
       "properties": {
         "ID": { "type": "string"},
         "objCode":  { "type": "string", "enum": ["USER", "PORT", "PRGM", "PROJ", "TASK", "OPTASK", "TMPL", "PTLSEC", "PTLTAB", "CMPY", "DOCU", "NOTE"] }
       },
-      "required": [
-        "ID",
-        "objCode"
-      ],
       "additionalProperties": true
     }
   },
   "required": [
     "eventType",
     "subscriptionId",
-    "fields"
+    "newState",
+    "oldState",
+    "eventTime"
   ],
   "additionalProperties": false
 }

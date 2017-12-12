@@ -9,11 +9,34 @@ deploymentBucket: ${self:custom.project.name}.serverless.deployment-bucket.${sel
 
 stream:
   name: ${self:custom.stage}-${self:custom.project.name}-stream
-#  arn: arn:aws:kinesis:${self:custom.private.region}:${self:custom.private.accountId}:stream/${self:custom.project.stream.name}
+  arn: arn:aws:kinesis:${self:custom.private.region}:${self:custom.private.accountId}:stream/${self:custom.project.stream.name}
 #  exportStreamName: ${self:custom.stream.service, ''}:${self:custom.stage}:StreamName:${self:custom.streamVersion, ''}
 #  exportStreamArn: ${self:custom.stream.service, ''}:${self:custom.stage}:StreamArn:${self:custom.streamVersion, ''}
 
 eventHandler:
   name: ${self:custom.stage}-${self:custom.project.name}-eventHandler
-  objCodes: OPTASK # pipe-separated, e.g., USER|PORT|PRGM|PROJ|TASK|OPTASK|TMPL|PTLSEC|PTLTAB|CMPY|DOCU|NOTE # TODO subscribe multi
-  eventTypes: CREATE # pipe-separated, e.g.,CREATE|DELETE|UPDATE|SHARE # TODO subscribe multi
+  objCodeEventTypePairs: OPTASK-CREATE|OPTASK-UPDATE|OPTASK-DELETE
+  # whole sets, for reference
+  #objCodes: USER|PORT|PRGM|PROJ|TASK|OPTASK|TMPL|PTLSEC|PTLTAB|CMPY|DOCU|NOTE
+  #eventTypes: CREATE|DELETE|UPDATE|SHARE
+
+storeEvent:
+  name: ${self:custom.stage}-${self:custom.project.name}-storeEvent
+  accountId: ${self:custom.private.storeEvents.accountId}
+  region: ${self:custom.private.storeEvents.region}
+  stage: ${self:custom.private.storeEvents.stage}
+  writer: # POST
+    restApi: ${self:custom.private.storeEvents.writeApi}
+    method: eventWriter
+    arn: arn:aws:execute-api:${self:custom.project.storeEvent.region}:${self:custom.project.storeEvent.accountId}:${self:custom.project.storeEvent.writer.restApi}/${self:custom.project.storeEvent.stage}/POST/${self:custom.project.storeEvent.writer.method}
+    url: https://${self:custom.project.storeEvent.writer.restApi}.execute-api.${self:custom.project.storeEvent.region}.amazonaws.com
+    path: /${self:custom.project.storeEvent.stage}/${self:custom.project.storeEvent.writer.method}/
+  reader: # GET
+    restApi: ${self:custom.private.storeEvents.readApi}
+    method: event
+    arn: arn:aws:execute-api:${self:custom.project.storeEvent.region}:${self:custom.project.storeEvent.accountId}:${self:custom.project.storeEvent.reader.restApi}/${self:custom.project.storeEvent.stage}/GET/${self:custom.project.storeEvent.reader.method}/*
+    url: https://${self:custom.project.storeEvent.reader.restApi}.execute-api.${self:custom.project.storeEvent.region}.amazonaws.com
+    path: /${self:custom.project.storeEvent.stage}/${self:custom.project.storeEvent.reader.method}/
+  workfront:
+    hostname: ${self:custom.private.WF.apiHostname}
+    path: /attask/api/v7.0/ # we're using Issues in Workfront (OPTASK)

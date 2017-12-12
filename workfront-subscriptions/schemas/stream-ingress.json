@@ -18,28 +18,15 @@
       "type": "object",
       "properties": {
         "schema": { "type": "string"},
-        "eventType":  { "type": "string", "enum": ["CREATE", "DELETE", "UPDATE", "SHARE"] },
-        "subscriptionId": { "type": "string"},
-        "fields": {
-          "type": "object",
-          "properties": {
-            "ID": { "type": "string"},
-            "objCode":  { "type": "string", "enum": ["USER", "PORT", "PRGM", "PROJ", "TASK", "OPTASK", "TMPL", "PTLSEC", "PTLTAB", "CMPY", "DOCU", "NOTE"] }
-          },
-          "required": [
-            "ID",
-            "objCode"
-          ],
-          "additionalProperties": true
-        }
+        "ID": { "type": "string"},
+        "objCode":  { "type": "string", "enum": ["USER", "PORT", "PRGM", "PROJ", "TASK", "OPTASK", "TMPL", "PTLSEC", "PTLTAB", "CMPY", "DOCU", "NOTE"] }
       },
       "required": [
         "schema",
-        "eventType",
-        "subscriptionId",
-        "fields"
+        "ID",
+        "objCode"
       ],
-      "additionalProperties": false
+      "additionalProperties": true
     }
   },
   "required": [

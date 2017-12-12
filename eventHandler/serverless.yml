@@ -33,8 +33,7 @@ functions:
         Fn::ImportValue: ${self:custom.stream.custom.exportStreamName}
       WFAPI_KEY: ${self:custom.private.WF.apiKey}
       WFAPI_ENDPOINT: ${self:custom.private.WF.apiEndpoint}
-      WFOBJ_CODES: ${self:custom.project.eventHandler.objCodes}
-      WFEVENT_TYPES: ${self:custom.project.eventHandler.eventTypes}
+      WFOBJ_CODES_EVENT_TYPES: ${self:custom.project.eventHandler.objCodeEventTypePairs}
     events:
       - http:
           path: eventHandler
