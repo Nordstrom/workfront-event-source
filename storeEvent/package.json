@@ -1,0 +1,17 @@
+{
+  "name": "storeEventsConsumer",
+  "version": "0.0.1",
+  "description": "A stream processor that submits Nordevents based on events for the Store Events Project from the Workfront stream.",
+  "main": "eventConsumer.js",
+  "scripts": {
+  },
+  "author": "Nordstrom",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Nordstrom/workfront-event-source/issues"
+  },
+  "dependencies": {
+    "kinesis-handler": "git+https://github.com/Nordstrom/kinesis-handler.git",
+    "workfront-subscriptions": "../workfront-subscriptions"
+  }
+}
